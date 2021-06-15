@@ -4,6 +4,7 @@
 from PIL import Image
 import argparse
 import numpy as np
+import os
 
 # How encoding works:
 #  bitwidth = 2^(exponent)
@@ -28,11 +29,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.bitwidth not in (1, 2, 4, 8):
-        raise argparse.ArgumentError('Invalid bitwidth: %d' % args.bitwidth)
+        parser.error('Invalid bitwidth: %d' % args.bitwidth)
 
     with open(args.file, 'rb') as f:
         src = f.read()
-    src = bytes(len(src)) + bytes(args.file) + src
 
     image = Image.open(args.image)
     dest = np.array(image)
@@ -40,8 +40,13 @@ if __name__ == '__main__':
     if len(src) > dest.size * 8 // args.bitwidth:
         raise ValueError("Not enough space")
     
+    # The footprint should store bitwidth (2 bits at 2 bits/byte), size (32 bits at bitwidth/byte), 
+    # file name ((8*chars+1) bits at bitwidth/byte), and content
+    # The file name is nul-terminated.
     if args.footprint:
         start = 1
+        ext = bytes(os.path.splitext(args.file)[1][1:] + '\0', encoding='utf8')
+        src = ext + len(src).to_bytes(4, 'big') + src
         dest[0] = dest[0] & ~0b11 | (1, 2, 4, 8).index(args.bitwidth)
     else:
         start = 0
